@@ -7,31 +7,31 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/kustomize/kstatus/status"
 
 	goharborv1alpha2 "github.com/goharbor/harbor-operator/api/v1alpha2"
 	"github.com/goharbor/harbor-operator/pkg/factories/logger"
 )
 
-func (r *Reconciler) GetCondition(ctx context.Context, harbor *goharborv1alpha2.Harbor, conditionType goharborv1alpha2.HarborConditionType) goharborv1alpha2.HarborCondition {
+func (r *Reconciler) GetCondition(ctx context.Context, harbor *goharborv1alpha2.Harbor, conditionType status.ConditionType) goharborv1alpha2.Condition {
 	for _, condition := range harbor.Status.Conditions {
 		if condition.Type == conditionType {
 			return condition
 		}
 	}
 
-	return goharborv1alpha2.HarborCondition{
+	return goharborv1alpha2.Condition{
 		Type:   conditionType,
 		Status: corev1.ConditionUnknown,
 	}
 }
 
-func (r *Reconciler) GetConditionStatus(ctx context.Context, harbor *goharborv1alpha2.Harbor, conditionType goharborv1alpha2.HarborConditionType) corev1.ConditionStatus {
+func (r *Reconciler) GetConditionStatus(ctx context.Context, harbor *goharborv1alpha2.Harbor, conditionType status.ConditionType) corev1.ConditionStatus {
 	return r.GetCondition(ctx, harbor, conditionType).Status
 }
 
-func (r *Reconciler) UpdateCondition(ctx context.Context, harbor *goharborv1alpha2.Harbor, conditionType goharborv1alpha2.HarborConditionType, status corev1.ConditionStatus, reasons ...string) error {
+func (r *Reconciler) UpdateCondition(ctx context.Context, harbor *goharborv1alpha2.Harbor, conditionType status.ConditionType, status corev1.ConditionStatus, reasons ...string) error {
 	var reason, message string
 
 	switch len(reasons) {
@@ -45,16 +45,8 @@ func (r *Reconciler) UpdateCondition(ctx context.Context, harbor *goharborv1alph
 		return errors.Errorf("expecting reason and message, got %d parameters", len(reasons))
 	}
 
-	now := metav1.Now()
-
 	for i, condition := range harbor.Status.Conditions {
 		if condition.Type == conditionType {
-			now.DeepCopyInto(&condition.LastUpdateTime)
-
-			if condition.LastTransitionTime.IsZero() || condition.Status != status {
-				now.DeepCopyInto(&condition.LastTransitionTime)
-			}
-
 			condition.Status = status
 			condition.Reason = reason
 			condition.Message = message
@@ -65,14 +57,12 @@ func (r *Reconciler) UpdateCondition(ctx context.Context, harbor *goharborv1alph
 		}
 	}
 
-	condition := goharborv1alpha2.HarborCondition{
+	condition := goharborv1alpha2.Condition{
 		Type:    conditionType,
 		Status:  status,
 		Reason:  reason,
 		Message: message,
 	}
-	now.DeepCopyInto(&condition.LastUpdateTime)
-	now.DeepCopyInto(&condition.LastTransitionTime)
 
 	harbor.Status.Conditions = append(harbor.Status.Conditions, condition)
 

@@ -31,12 +31,8 @@ type ComponentSpec struct {
 
 // https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 type ComponentStatus struct {
-	Result `json:",inline"`
-
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-}
 
-type Result struct {
 	// Status
 	Status status.Status `json:"status"`
 

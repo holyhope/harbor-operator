@@ -22,6 +22,9 @@ type Client struct {
 
 func (r *Client) GetByProxy(ctx context.Context, harbor *goharborv1alpha2.Harbor) (*APIHealth, error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "check")
+	defer span.Finish()
+
+	config := rest.CopyConfig(r.RestConfig)
 	config.APIPath = "api"
 	config.NegotiatedSerializer = serializer.NewCodecFactory(r.Scheme)
 	config.GroupVersion = &corev1.SchemeGroupVersion
