@@ -5,9 +5,5 @@ namespace: '{{ .Release.Namespace | quote }}'
 generatorOptions:
   disableNameSuffixHash: true
 
-patches:
-- patch_leaderelection_binding.yaml
-- patch_manager_binding.yaml
-
 bases:
-- ../../rbac
+- ../../config

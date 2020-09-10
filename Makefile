@@ -5,17 +5,14 @@ IMG ?= goharbor/harbor-operator:dev
 CONFIGURATION_FROM ?= env,file:$(CURDIR)/config-dev.yml
 export CONFIGURATION_FROM
 
-CHARTS_DIRECTORY      := $(CURDIR)/charts
-CHART_HARBOR_OPERATOR := $(CHARTS_DIRECTORY)/harbor-operator
-
-REGISTRY_TEMPLATE_PATH     ?= $(CHART_HARBOR_OPERATOR)/assets/registry-config.yaml.tmpl
-PORTAL_TEMPLATE_PATH       ?= $(CHART_HARBOR_OPERATOR)/assets/portal-config.conf.tmpl
-REGISTRYCTL_TEMPLATE_PATH  ?= $(CHART_HARBOR_OPERATOR)/assets/registryctl-config.yaml.tmpl
-JOBSERVICE_TEMPLATE_PATH   ?= $(CHART_HARBOR_OPERATOR)/assets/jobservice-config.yaml.tmpl
-CORE_TEMPLATE_PATH         ?= $(CHART_HARBOR_OPERATOR)/assets/core-config.conf.tmpl
-CHARTMUSEUM_TEMPLATE_PATH  ?= $(CHART_HARBOR_OPERATOR)/assets/chartmuseum-config.yaml.tmpl
-NOTARYSERVER_TEMPLATE_PATH ?= $(CHART_HARBOR_OPERATOR)/assets/notaryserver-config.json.tmpl
-NOTARYSIGNER_TEMPLATE_PATH ?= $(CHART_HARBOR_OPERATOR)/assets/notarysigner-config.json.tmpl
+REGISTRY_TEMPLATE_PATH     ?= $(CURDIR)/config/config/assets/registry-config.yaml.tmpl
+PORTAL_TEMPLATE_PATH       ?= $(CURDIR)/config/config/assets/portal-config.conf.tmpl
+REGISTRYCTL_TEMPLATE_PATH  ?= $(CURDIR)/config/config/assets/registryctl-config.yaml.tmpl
+JOBSERVICE_TEMPLATE_PATH   ?= $(CURDIR)/config/config/assets/jobservice-config.yaml.tmpl
+CORE_TEMPLATE_PATH         ?= $(CURDIR)/config/config/assets/core-config.conf.tmpl
+CHARTMUSEUM_TEMPLATE_PATH  ?= $(CURDIR)/config/config/assets/chartmuseum-config.yaml.tmpl
+NOTARYSERVER_TEMPLATE_PATH ?= $(CURDIR)/config/config/assets/notaryserver-config.json.tmpl
+NOTARYSIGNER_TEMPLATE_PATH ?= $(CURDIR)/config/config/assets/notarysigner-config.json.tmpl
 
 export REGISTRY_TEMPLATE_PATH
 export PORTAL_TEMPLATE_PATH
@@ -34,6 +31,9 @@ define GITHUB_CREDENTIALS
 endef
 
 export GITHUB_CREDENTIALS
+
+CHARTS_DIRECTORY      := $(CURDIR)/charts
+CHART_HARBOR_OPERATOR := $(CHARTS_DIRECTORY)/harbor-operator
 
 ########
 
@@ -244,8 +244,24 @@ $(CHART_CRDS_PATH)/$(CRD_GROUP)_%.yaml: kustomize config/crd/bases $(wildcard co
 	mkdir -p $(CHART_CRDS_PATH)
 	echo '# $(DO_NOT_EDIT)' > $(CHART_CRDS_PATH)/$*.yaml
 	$(KUSTOMIZE) build --reorder legacy config/helm/crds | \
-	$(KUSTOMIZE) cfg grep --annotate=false 'metadata.name=$*\.$(subst .,\.,$(CRD_GROUP))' \
+	$(KUSTOMIZE) cfg grep --annotate=false 'metadata.name=$*\.$(subst .,\.,$(CRD_GROUP))' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_CRDS_PATH)/$*.yaml
+
+$(CHART_TEMPLATE_PATH)/configmap.yaml: kustomize config/manager $(wildcard config/helm/config/*) $(wildcard config/config/*) $(wildcard config/config/assets/*)
+	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/configmap.yaml
+	$(KUSTOMIZE) build --reorder legacy config/helm/config | \
+	$(KUSTOMIZE) cfg grep --annotate=false 'kind=ConfigMap' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
+		>> $(CHART_TEMPLATE_PATH)/configmap.yaml
+
+$(CHART_TEMPLATE_PATH)/deployment.yaml: kustomize config/manager $(wildcard config/helm/deployment/*) $(wildcard config/manager/*)
+	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/deployment.yaml
+	$(KUSTOMIZE) build --reorder legacy config/helm/deployment | \
+	$(KUSTOMIZE) cfg grep --annotate=false 'kind=Deployment' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
+		>> $(CHART_TEMPLATE_PATH)/deployment.yaml
+	cat config/helm/deployment/foot.yaml >> $(CHART_TEMPLATE_PATH)/deployment.yaml
 
 $(CHART_TEMPLATE_PATH)/role.yaml: kustomize config/rbac $(wildcard config/helm/rbac/*) $(wildcard config/rbac/*)
 	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/role.yaml
@@ -253,7 +269,8 @@ $(CHART_TEMPLATE_PATH)/role.yaml: kustomize config/rbac $(wildcard config/helm/r
 	$(KUSTOMIZE) build --reorder legacy config/helm/rbac | \
 	$(KUSTOMIZE) cfg grep --annotate=false 'kind=Role' | \
 	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=ClusterRole' | \
-	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=RoleBinding' \
+	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=RoleBinding' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_TEMPLATE_PATH)/role.yaml
 	echo '{{- end -}}' >> $(CHART_TEMPLATE_PATH)/role.yaml
 
@@ -262,7 +279,8 @@ $(CHART_TEMPLATE_PATH)/clusterrole.yaml: kustomize config/rbac $(wildcard config
 	echo '{{- if .Values.rbac.create }}' >> $(CHART_TEMPLATE_PATH)/clusterrole.yaml
 	$(KUSTOMIZE) build --reorder legacy config/helm/rbac | \
 	$(KUSTOMIZE) cfg grep --annotate=false 'kind=ClusterRole' | \
-	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=ClusterRoleBinding' \
+	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=ClusterRoleBinding' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_TEMPLATE_PATH)/clusterrole.yaml
 	echo '{{- end -}}' >> $(CHART_TEMPLATE_PATH)/clusterrole.yaml
 
@@ -271,7 +289,8 @@ $(CHART_TEMPLATE_PATH)/rolebinding.yaml: kustomize config/rbac $(wildcard config
 	echo '{{- if .Values.rbac.create }}' >> $(CHART_TEMPLATE_PATH)/rolebinding.yaml
 	$(KUSTOMIZE) build --reorder legacy config/helm/rbac | \
 	$(KUSTOMIZE) cfg grep --annotate=false 'kind=RoleBinding' | \
-	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=ClusterRoleBinding' \
+	$(KUSTOMIZE) cfg grep --annotate=false --invert-match 'kind=ClusterRoleBinding' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_TEMPLATE_PATH)/rolebinding.yaml
 	echo '{{- end -}}' >> $(CHART_TEMPLATE_PATH)/rolebinding.yaml
 
@@ -279,10 +298,10 @@ $(CHART_TEMPLATE_PATH)/clusterrolebinding.yaml: kustomize config/rbac $(wildcard
 	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/clusterrolebinding.yaml
 	echo '{{- if .Values.rbac.create }}' >> $(CHART_TEMPLATE_PATH)/clusterrolebinding.yaml
 	$(KUSTOMIZE) build --reorder legacy config/helm/rbac | \
-	$(KUSTOMIZE) cfg grep --annotate=false 'kind=ClusterRoleBinding' \
+	$(KUSTOMIZE) cfg grep --annotate=false 'kind=ClusterRoleBinding' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_TEMPLATE_PATH)/clusterrolebinding.yaml
 	echo '{{- end -}}' >> $(CHART_TEMPLATE_PATH)/clusterrolebinding.yaml
-
 
 $(CHART_TEMPLATE_PATH)/validatingwebhookconfiguration.yaml: kustomize config/webhook $(wildcard config/helm/webhook/*) $(wildcard config/webhook/*)
 	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/validatingwebhookconfiguration.yaml
@@ -301,13 +320,15 @@ $(CHART_TEMPLATE_PATH)/mutatingwebhookconfiguration.yaml: kustomize config/webho
 $(CHART_TEMPLATE_PATH)/certificate.yaml: kustomize config/certmanager $(wildcard config/helm/certmanager/*) $(wildcard config/certmanager/*)
 	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/certificate.yaml
 	$(KUSTOMIZE) build --reorder legacy config/helm/certificate | \
-	$(KUSTOMIZE) cfg grep --annotate=false 'kind=Certificate' \
+	$(KUSTOMIZE) cfg grep --annotate=false 'kind=Certificate' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_TEMPLATE_PATH)/certificate.yaml
 
 $(CHART_TEMPLATE_PATH)/issuer.yaml: kustomize config/certmanager $(wildcard config/helm/certmanager/*) $(wildcard config/certmanager/*)
 	echo '# $(DO_NOT_EDIT)' > $(CHART_TEMPLATE_PATH)/issuer.yaml
 	$(KUSTOMIZE) build --reorder legacy config/helm/certificate | \
-	$(KUSTOMIZE) cfg grep --annotate=false 'kind=Issuer' \
+	$(KUSTOMIZE) cfg grep --annotate=false 'kind=Issuer' | \
+	sed "s/'\({{.*}}\)'/\1/g" \
 		>> $(CHART_TEMPLATE_PATH)/issuer.yaml
 
 $(CHART_HARBOR_OPERATOR)/charts: $(CHART_HARBOR_OPERATOR)/Chart.lock
@@ -328,7 +349,7 @@ helm-generate: $(CHART_HARBOR_OPERATOR)/README.md $(subst config/crd/bases/,$(CH
 	$(CHART_TEMPLATE_PATH)/rolebinding.yaml $(CHART_TEMPLATE_PATH)/clusterrolebinding.yaml \
 	$(CHART_TEMPLATE_PATH)/mutatingwebhookconfiguration.yaml $(CHART_TEMPLATE_PATH)/validatingwebhookconfiguration.yaml \
 	$(CHART_TEMPLATE_PATH)/certificate.yaml $(CHART_TEMPLATE_PATH)/issuer.yaml \
-	$(CHART_HARBOR_OPERATOR)/charts
+	$(CHART_TEMPLATE_PATH)/deployment.yaml $(CHART_HARBOR_OPERATOR)/charts
 
 #####################
 #    Dev helpers    #
