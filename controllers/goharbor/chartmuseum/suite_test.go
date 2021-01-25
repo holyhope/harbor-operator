@@ -35,11 +35,7 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func(done Done) {
 	ctx = test.InitSuite()
 
-	By("Configuring controller")
-
-	mgr := test.GetManager(ctx)
 	name := controllers.ChartMuseum.String()
-	harborClass = test.NewName(name)
 
 	configStore, _ := test.NewConfig(ctx, chartmuseum.ConfigTemplatePathKey, path.Base(chartmuseum.DefaultConfigTemplatePath))
 	/* TODO: Enable this when HarborClass is fixed
@@ -47,26 +43,10 @@ var _ = BeforeSuite(func(done Done) {
 	*/
 	configStore.Env(name)
 
-	commonReconciler, err := chartmuseum.New(ctx, name, configStore)
+	reconciler, err := chartmuseum.New(ctx, name, configStore)
 	Expect(err).ToNot(HaveOccurred())
 
-	var ok bool
-	reconciler, ok = commonReconciler.(*chartmuseum.Reconciler)
-	Expect(ok).To(BeTrue())
-
-	Expect(reconciler.SetupWithManager(ctx, mgr)).
-		To(Succeed())
-
-	stopCh = make(chan struct{})
-
-	go func() {
-		defer GinkgoRecover()
-
-		By("Starting manager")
-
-		Expect(mgr.Start(stopCh)).
-			To(Succeed(), "failed to start manager")
-	}()
+	ctx, harborClass, stopCh = test.StartController(ctx, reconciler)
 
 	close(done)
 }, 60)
